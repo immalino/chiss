@@ -7,7 +7,8 @@ export type MessageType =
   | "GET_VARIATIONS"
   | "GET_CURRENT_POSITION"
   | "GET_CURRENT_NODE"
-  | "REFRESH";
+  | "REFRESH"
+  | "MOVE_TREE_UPDATED";
 
 export interface Message<T = unknown> {
   type: MessageType;

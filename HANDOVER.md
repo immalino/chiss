@@ -1,6 +1,6 @@
 # Handover — Chiss (Chess.com DOM Move Tree Tracker)
 
-> Session baru: lanjutkan **Phase 8 — MutationObserver & State**.
+> Session baru: lanjutkan **Phase 9 — SPA Navigation**.
 > Baca `implementation-plan.md` untuk konteks full 13 phase.
 
 ---
@@ -16,14 +16,22 @@
 | 5 — Variation Parser | ✅ | `src/content/variationParser.ts` |
 | 6 — Move Tree Builder | ✅ | `src/chess/moveTree.ts` + `tests/moveTree.test.ts` (21 test pass) |
 | **7 — FEN Position Builder** | ✅ | `src/chess/positionBuilder.ts` + `tests/positionBuilder.test.ts` (12 test pass) |
-| 8 — MutationObserver & State | 🔜 **NEXT** | `moveTracker.ts` belum ada (observer inline di `content/index.ts`) |
-| 9 — SPA Navigation | ⬜ | — |
+| 8 — MutationObserver & State | ✅ | `src/content/moveTracker.ts` + observer pindah dari `index.ts` |
+| 9 — SPA Navigation | 🔜 **NEXT** | — |
 | 10 — Chrome Message API | types only | `messages.ts` lengkap, belum ada handler |
 | 11 — Popup UI | scaffold | `App.tsx` placeholder |
 | 12 — Debug Commands | ⬜ | — |
 | 13 — Testing | partial | `tests/moveTree.test.ts` + `tests/positionBuilder.test.ts`; test parser menyusul |
 
 **Verify setelah tiap phase:** `npx tsc --noEmit` dan `npx vitest run`.
+
+---
+
+## Phase 8 — Selesai
+
+**Done:** `src/content/moveTracker.ts` — orchestrator: `refresh()` = detect → parse mainline → parse variations → `buildMoveTree` → `buildFenForTree` → `normalizeState` diff (tanpa `domElement`) → kalau berubah emit `CustomEvent("chiss:MOVE_TREE_UPDATED")` (export `MOVE_TREE_UPDATED`); kalau sama skip. `startObserver()/stopObserver()` (debounce 200ms, filter mutation di move-list), `resetState()` disiapkan untuk Phase 9, getter `getState/getMoveTree/getGameState`. `index.ts` tinggal retry-loop + `refresh()` + `startObserver()`.
+
+**Bug fix saat Phase 8:** `normalizeState` lama pakai `JSON.stringify(state, Object.keys(state))` — array-replacer menyaring key **secara rekursif** → semua nested key hilang → diff selalu "sama". Diganti deep-sort-keys lalu stringify.
 
 ---
 
@@ -49,7 +57,8 @@ src/
 │   ├── moveTree.ts         # ✅ Phase 6: buildMoveTree, addNode, findNode, makeNodeId, createRootNode, ROOT_ID
 │   └── positionBuilder.ts  # ✅ Phase 7: buildFenForTree
 ├── content/
-│   ├── index.ts            # entry: inspector + observer inline (debounce 200ms) — belum orchestrate tree
+│   ├── index.ts            # entry: retry-loop + refresh() + startObserver()
+│   ├── moveTracker.ts      # ✅ Phase 8: orchestrator refresh + observer + state diff
 │   ├── selectors.ts        # selectorCandidates + queryFirst/queryAll + SAN_REGEX
 │   ├── domInspector.ts     # inspectMoveDOM, inspectMoveTreeDOM
 │   ├── gameDetector.ts     # detectGamePage(): GameState
@@ -143,13 +152,12 @@ Load unpacked extension dari `dist/` setelah `npm run build` (atau via CRXJS dev
 ## Git
 
 - Repo: `C:\Users\malino\Desktop\chiss` (git repo)
-- Commits terakhir: `Phase 2-5: DOM inspector...`, `Phase 1: project setup...`
-- **Belum commit Phase 6 & 7** (cek `git status` — `moveTree.ts`, `positionBuilder.ts`, tests, mungkin unstaged).
+- Commits terakhir: `Phase 8: moveTracker...`, `Phase 6-7: move tree...`, `Phase 2-5...`, `Phase 1...`
 - **Jangan commit/push kecuali user minta eksplisit.**
 
 ---
 
-## Next setelah Phase 7 (sudah selesai)
+## Next setelah Phase 8 (sudah selesai)
 
-- **Phase 8 (NEXT):** `src/content/moveTracker.ts` — orchestrator: debounce → detect → parse → `buildMoveTree` → `buildFenForTree` → `normalizeState` diff → emit `MOVE_TREE_UPDATED`.
-- Lalu Phase 9 (SPA history patch), 10 (message handlers), 11 (popup UI), 12 (`window.__CHESS_TRACKER__`), 13 (test parser sisa).
+- **Phase 9 (NEXT):** SPA navigation — monkey-patch `history.pushState/replaceState` + `popstate` → `resetState()` + re-detect + `refresh()`. Taruh di `moveTracker.ts`.
+- Lalu Phase 10 (message handlers — `MOVE_TREE_UPDATED` sudah ada di `MessageType`), 11 (popup UI), 12 (`window.__CHESS_TRACKER__`), 13 (test parser sisa).

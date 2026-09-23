@@ -9,8 +9,21 @@ export function debounce<T extends (...args: unknown[]) => void>(
   };
 }
 
+function sortKeysDeep(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(sortKeysDeep);
+  if (value && typeof value === "object") {
+    const source = value as Record<string, unknown>;
+    const sorted: Record<string, unknown> = {};
+    for (const key of Object.keys(source).sort()) {
+      sorted[key] = sortKeysDeep(source[key]);
+    }
+    return sorted;
+  }
+  return value;
+}
+
 export function normalizeState<T>(state: T): string {
-  return JSON.stringify(state, Object.keys(state as object).sort());
+  return JSON.stringify(sortKeysDeep(state));
 }
 
 export function serialize(state: unknown): string {

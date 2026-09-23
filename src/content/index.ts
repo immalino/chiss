@@ -1,59 +1,17 @@
 import { log } from "../shared/logger";
-import { debounce } from "../shared/utils";
 import { inspectMoveDOM, inspectMoveTreeDOM } from "./domInspector";
-import { detectGamePage } from "./gameDetector";
-import { parseMainLineFromDOM } from "./mainlineParser";
-import { parseVariationsFromDOM } from "./variationParser";
+import { refresh, startObserver } from "./moveTracker";
 
 log.info("Content script loaded on", window.location.href);
 
-let observer: MutationObserver | null = null;
-
-function fullScan(label: string): boolean {
+function runOnce(label: string): boolean {
   log.info(`--- scan: ${label} ---`);
   const report = inspectMoveDOM();
   if (report.moveElementCount === 0) return false;
   inspectMoveTreeDOM();
-  detectGamePage();
-  parseMainLineFromDOM();
-  parseVariationsFromDOM();
+  refresh();
+  startObserver();
   return true;
-}
-
-const rescan = debounce(() => {
-  const mainline = parseMainLineFromDOM();
-  const variations = parseVariationsFromDOM();
-  log.info(
-    `Rescan after DOM mutation: mainline=${mainline.length} variations=${variations.length}`,
-  );
-}, 200);
-
-function startObserver(): void {
-  if (observer) return;
-  observer = new MutationObserver((mutations) => {
-    const relevant = mutations.some((m) => {
-      const target =
-        m.target instanceof Element ? m.target : m.target.parentElement;
-      if (!target) return false;
-      return (
-        target.closest("wc-move-list, .move-list, .analysis-view-movelist") !==
-        null
-      );
-    });
-    if (relevant) rescan();
-  });
-  observer.observe(document.body, {
-    subtree: true,
-    childList: true,
-    characterData: true,
-  });
-  log.info("MutationObserver started on move list");
-}
-
-function runOnce(label: string): boolean {
-  const ok = fullScan(label);
-  if (ok) startObserver();
-  return ok;
 }
 
 if (!runOnce("initial")) {
