@@ -1,5 +1,6 @@
 import { log } from "../shared/logger";
 import { inspectMoveDOM, inspectMoveTreeDOM } from "./domInspector";
+import { installDebugCommands } from "./debugCommands";
 import { startMessageHandler } from "./messageHandler";
 import { refresh, startObserver, startSpaNavigation } from "./moveTracker";
 
@@ -7,6 +8,7 @@ log.info("Content script loaded on", window.location.href);
 
 startSpaNavigation();
 startMessageHandler();
+installDebugCommands();
 
 function runOnce(label: string): boolean {
   log.info(`--- scan: ${label} ---`);

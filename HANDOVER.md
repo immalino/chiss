@@ -1,6 +1,6 @@
 # Handover — Chiss (Chess.com DOM Move Tree Tracker)
 
-> Session baru: lanjutkan **Phase 12 — Debug Commands**.
+> Session baru: lanjutkan **Phase 13 — Testing (parser sisa)**.
 > Baca `implementation-plan.md` untuk konteks full 13 phase.
 
 ---
@@ -20,10 +20,20 @@
 | 9 — SPA Navigation | ✅ | `startSpaNavigation/stopSpaNavigation` di `moveTracker.ts`, dipanggil di `index.ts` |
 | 10 — Chrome Message API | ✅ | `src/content/messageHandler.ts` + `tests/messageHandler.test.ts` (9 test pass) |
 | 11 — Popup UI | ✅ | `src/popup/App.tsx` + `main.tsx` + `components/*` (6 komponen) |
-| 12 — Debug Commands | 📋 NEXT | — |
-| 13 — Testing | partial | `moveTree` + `positionBuilder` + `messageHandler`; parser tests menyusul |
+| 12 — Debug Commands | ✅ | `src/content/debugCommands.ts` (`installDebugCommands`) |
+| 13 — Testing | 📋 NEXT partial | `moveTree` + `positionBuilder` + `messageHandler` done; parser tests menyusul |
 
 **Verify setelah tiap phase:** `npx tsc --noEmit` dan `npx vitest run`.
+
+---
+
+## Phase 12 — Selesai
+
+**Done:** `src/content/debugCommands.ts` — export `installDebugCommands()` + interface `ChessTrackerDebug`; dipanggil di `index.ts` setelah `startMessageHandler()`. Set `window.__CHESS_TRACKER__ = { getState(), getMoveTree(), getMainline() (nodes urut mainLine), getVariations(), getCurrentNode() (currentNodeId → fallback root), inspectDOM() ({ move, tree } — jalankan inspectMoveDOM + inspectMoveTreeDOM), refresh() }`. Getter pakai `getSerializableState()` (bebas `domElement`); `installDebugCommands` wrap try/catch + `log.error`.
+
+**Gotcha:** `window` di content script **isolated world ≠ page window** — `__CHESS_TRACKER__` hanya terlihat dari DevTools content-script context (Sources → content scripts context dropdown di console), BUKAN dari page console default. Jangan akses dari page JS / popup.
+
+**Verify:** `npm run typecheck` ✅, `npm test` ✅ (42 tests), `npm run build` ✅ (content 64.9 kB + popup 157 kB).
 
 ---
 
@@ -85,7 +95,8 @@ src/
 │   ├── moveTree.ts         # ✅ Phase 6: buildMoveTree, addNode, findNode, makeNodeId, createRootNode, ROOT_ID
 │   └── positionBuilder.ts  # ✅ Phase 7: buildFenForTree
 ├── content/
-│   ├── index.ts            # entry: startSpaNavigation() + startMessageHandler() + retry-loop + refresh() + startObserver()
+│   ├── index.ts            # entry: startSpaNavigation() + startMessageHandler() + installDebugCommands() + retry-loop + refresh() + startObserver()
+│   ├── debugCommands.ts    # ✅ Phase 12: installDebugCommands → window.__CHESS_TRACKER__ (7 methods)
 │   ├── moveTracker.ts      # ✅ Phase 8-10: orchestrator refresh + observer + state diff + SPA nav + getSerializableState()
 │   ├── messageHandler.ts   # ✅ Phase 10: handleMessage + startMessageHandler (7 message types)
 │   ├── selectors.ts        # selectorCandidates + queryFirst/queryAll + SAN_REGEX
@@ -197,7 +208,6 @@ Load unpacked extension dari `dist/` setelah `npm run build` (atau via CRXJS dev
 
 ---
 
-## Next setelah Phase 11 (sudah selesai)
+## Next setelah Phase 12 (sudah selesai)
 
-- **Phase 12 (NEXT):** Debug Commands — expose `window.__CHESS_TRACKER__ = { getState, getMoveTree, getMainline, getVariations, getCurrentNode, inspectDOM, refresh }` di `src/content/index.ts`. Note: `window` di isolated world ≠ page window; hanya untuk DevTools (content script context / console).
-- Lalu Phase 13 (test parser sisa: `mainlineParser`, `variationParser`, state diff, SPA reset).
+- **Phase 13 (NEXT): Testing** — test parser sisa: `tests/mainlineParser.test.ts`, `tests/variationParser.test.ts` (mock DOM via jsdom/vitest environment), state diff (`normalizeState` di `utils`), SPA reset. Checklist di `implementation-plan.md` Phase 13 (#1-#10).
