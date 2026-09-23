@@ -191,7 +191,8 @@ Load unpacked extension dari `dist/` setelah `npm run build` (atau via CRXJS dev
 ## Git
 
 - Repo: `C:\Users\malino\Desktop\chiss` (git repo)
-- Commits terakhir: `Phase 8: moveTracker...`, `Phase 6-7: move tree...`, `Phase 2-5...`, `Phase 1...` (Phase 9-11 belum di-commit)
+- Commits terakhir: `Phase 11: popup UI...`, `Phase 10...`, `Phase 9...`, `Phase 8...` (sampai Phase 11 sudah di-commit & push ke `origin/main`)
+- Remote: `origin` → `https://github.com/immalino/chiss.git`
 - **Jangan commit/push kecuali user minta eksplisit.**
 
 ---
