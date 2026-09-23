@@ -28,7 +28,8 @@ export interface ParsedMove {
   color: "white" | "black";
   san: string;
   domElement?: HTMLElement;
-  source: "mainline";
+  source: "mainline" | "variation" | "exploration";
+  isActive?: boolean;
 }
 
 export interface Variation {
