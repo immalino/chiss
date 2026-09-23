@@ -141,3 +141,129 @@ export function stopObserver(): void {
   observer = null;
   log.info("MutationObserver stopped");
 }
+
+const NAV_INITIAL_DELAY_MS = 150;
+const NAV_RETRY_MS = 500;
+const NAV_MAX_RETRIES = 10;
+const NAV_POLL_MS = 500;
+
+let spaStarted = false;
+let lastHref = "";
+let navTimer: number | null = null;
+let navAttempts = 0;
+let pollTimer: number | null = null;
+let savedPushState: History["pushState"] | null = null;
+let savedReplaceState: History["replaceState"] | null = null;
+let popstateHandler: (() => void) | null = null;
+
+function clearNavTimer(): void {
+  if (navTimer !== null) {
+    window.clearTimeout(navTimer);
+    navTimer = null;
+  }
+}
+
+function runNavRefresh(): void {
+  navTimer = null;
+  navAttempts++;
+  startObserver();
+  const ok = refresh();
+  if (ok) {
+    log.info(`SPA nav refresh ok (attempt ${navAttempts})`);
+    return;
+  }
+  const pageType = getGameState().pageType;
+  if (pageType === "unknown") {
+    log.info("SPA nav: not a game page — stop retrying");
+    return;
+  }
+  if (navAttempts >= NAV_MAX_RETRIES) {
+    log.warn(`SPA nav: no mainline after ${navAttempts} attempts`);
+    return;
+  }
+  navTimer = window.setTimeout(runNavRefresh, NAV_RETRY_MS);
+}
+
+function scheduleNavRefresh(delayMs: number): void {
+  clearNavTimer();
+  navAttempts = 0;
+  navTimer = window.setTimeout(runNavRefresh, delayMs);
+}
+
+function handleNavigation(source: string): void {
+  try {
+    const href = window.location.href;
+    if (href === lastHref) return;
+    lastHref = href;
+    log.info(`SPA navigation (${source}): ${href}`);
+    resetState();
+    scheduleNavRefresh(NAV_INITIAL_DELAY_MS);
+  } catch (err) {
+    log.error("handleNavigation failed:", err);
+  }
+}
+
+function patchHistory(): void {
+  savedPushState = history.pushState;
+  savedReplaceState = history.replaceState;
+  history.pushState = function patchedPushState(
+    this: History,
+    ...args: Parameters<History["pushState"]>
+  ): void {
+    savedPushState?.apply(this, args);
+    handleNavigation("pushState");
+  };
+  history.replaceState = function patchedReplaceState(
+    this: History,
+    ...args: Parameters<History["replaceState"]>
+  ): void {
+    savedReplaceState?.apply(this, args);
+    handleNavigation("replaceState");
+  };
+}
+
+function unpatchHistory(): void {
+  if (savedPushState) history.pushState = savedPushState;
+  if (savedReplaceState) history.replaceState = savedReplaceState;
+  savedPushState = null;
+  savedReplaceState = null;
+}
+
+export function startSpaNavigation(): void {
+  try {
+    if (spaStarted) return;
+    spaStarted = true;
+    lastHref = window.location.href;
+    patchHistory();
+    popstateHandler = () => handleNavigation("popstate");
+    window.addEventListener("popstate", popstateHandler);
+    pollTimer = window.setInterval(
+      () => handleNavigation("poll"),
+      NAV_POLL_MS,
+    );
+    log.info("SPA navigation tracking started");
+  } catch (err) {
+    log.error("startSpaNavigation failed:", err);
+    spaStarted = false;
+  }
+}
+
+export function stopSpaNavigation(): void {
+  try {
+    if (!spaStarted) return;
+    spaStarted = false;
+    unpatchHistory();
+    if (popstateHandler) {
+      window.removeEventListener("popstate", popstateHandler);
+      popstateHandler = null;
+    }
+    if (pollTimer !== null) {
+      window.clearInterval(pollTimer);
+      pollTimer = null;
+    }
+    clearNavTimer();
+    log.info("SPA navigation tracking stopped");
+  } catch (err) {
+    log.error("stopSpaNavigation failed:", err);
+  }
+}
