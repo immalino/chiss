@@ -299,8 +299,10 @@ DOM mutation detected
 
 ---
 
-### Phase 10 — Chrome Message API
+### Phase 10 — Chrome Message API ✅
 **Goal:** Content script ↔ popup communication.
+
+**Status:** Done — `src/content/messageHandler.ts` (`handleMessage` + `startMessageHandler`), registered in `index.ts`, tests in `tests/messageHandler.test.ts`.
 
 **Messages:**
 ```

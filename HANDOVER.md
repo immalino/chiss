@@ -1,6 +1,6 @@
 # Handover — Chiss (Chess.com DOM Move Tree Tracker)
 
-> Session baru: lanjutkan **Phase 10 — Chrome Message API (handlers)**.
+> Session baru: lanjutkan **Phase 11 — Popup UI**.
 > Baca `implementation-plan.md` untuk konteks full 13 phase.
 
 ---
@@ -15,15 +15,25 @@
 | 4 — Main Line Parser | ✅ | `src/content/mainlineParser.ts`, `src/chess/moveParser.ts` |
 | 5 — Variation Parser | ✅ | `src/content/variationParser.ts` |
 | 6 — Move Tree Builder | ✅ | `src/chess/moveTree.ts` + `tests/moveTree.test.ts` (21 test pass) |
-| **7 — FEN Position Builder** | ✅ | `src/chess/positionBuilder.ts` + `tests/positionBuilder.test.ts` (12 test pass) |
+| 7 — FEN Position Builder | ✅ | `src/chess/positionBuilder.ts` + `tests/positionBuilder.test.ts` (12 test pass) |
 | 8 — MutationObserver & State | ✅ | `src/content/moveTracker.ts` + observer pindah dari `index.ts` |
 | 9 — SPA Navigation | ✅ | `startSpaNavigation/stopSpaNavigation` di `moveTracker.ts`, dipanggil di `index.ts` |
-| 10 — Chrome Message API | 📋 NEXT | types only — `messages.ts` lengkap, belum ada handler |
-| 11 — Popup UI | scaffold | `App.tsx` placeholder |
+| 10 — Chrome Message API | ✅ | `src/content/messageHandler.ts` + `tests/messageHandler.test.ts` (9 test pass) |
+| 11 — Popup UI | 📋 NEXT | `App.tsx` placeholder |
 | 12 — Debug Commands | ⬜ | — |
-| 13 — Testing | partial | `tests/moveTree.test.ts` + `tests/positionBuilder.test.ts`; test parser menyusul |
+| 13 — Testing | partial | `moveTree` + `positionBuilder` + `messageHandler`; parser tests menyusul |
 
 **Verify setelah tiap phase:** `npx tsc --noEmit` dan `npx vitest run`.
+
+---
+
+## Phase 10 — Selesai
+
+**Done:** `src/content/messageHandler.ts` — `handleMessage(message): Response<unknown>` (pure, testable) handle 7 type: `GET_GAME_STATE`, `GET_MOVE_TREE`, `GET_MAINLINE` (nodes urut `mainLine`), `GET_VARIATIONS`, `GET_CURRENT_POSITION` (`currentNodeId` + `fen`, fallback root fen), `GET_CURRENT_NODE`, `REFRESH` (panggil `refresh()`, return `{ refreshed: boolean }`). Unknown/invalid → `{ ok: false, error }`. `startMessageHandler()` daftarkan `chrome.runtime.onMessage.addListener` (sync, return false), dipanggil di `index.ts` setelah `startSpaNavigation()`.
+
+**Perubahan pendukung:** `TrackerState` sekarang punya field `variations: Variation[]` (diisi di `refresh()`, ikut masuk state-diff). Export baru `getSerializableState()` di `moveTracker.ts` — deep-strip `domElement` dari semua node + variation moves (wajib: HTMLElement tidak bisa di-serialize lewat chrome messaging). `messages.ts` + `RefreshResponse`.
+
+**Gotcha:** `domElement` (HTMLElement) TIDAK boleh ikut dikirim via `chrome.runtime.sendMessage` — DataCloneError. Selalu lewat `getSerializableState()`. `handleMessage` sengaja terpisah dari listener agar bisa di-test tanpa env `chrome`.
 
 ---
 
@@ -65,8 +75,9 @@ src/
 │   ├── moveTree.ts         # ✅ Phase 6: buildMoveTree, addNode, findNode, makeNodeId, createRootNode, ROOT_ID
 │   └── positionBuilder.ts  # ✅ Phase 7: buildFenForTree
 ├── content/
-│   ├── index.ts            # entry: startSpaNavigation() + retry-loop + refresh() + startObserver()
-│   ├── moveTracker.ts      # ✅ Phase 8-9: orchestrator refresh + observer + state diff + SPA nav
+│   ├── index.ts            # entry: startSpaNavigation() + startMessageHandler() + retry-loop + refresh() + startObserver()
+│   ├── moveTracker.ts      # ✅ Phase 8-10: orchestrator refresh + observer + state diff + SPA nav + getSerializableState()
+│   ├── messageHandler.ts   # ✅ Phase 10: handleMessage + startMessageHandler (7 message types)
 │   ├── selectors.ts        # selectorCandidates + queryFirst/queryAll + SAN_REGEX
 │   ├── domInspector.ts     # inspectMoveDOM, inspectMoveTreeDOM
 │   ├── gameDetector.ts     # detectGamePage(): GameState
@@ -146,27 +157,28 @@ Load unpacked extension dari `dist/` setelah `npm run build` (atau via CRXJS dev
 - Variation parser (`variationParser.ts`) men-clone `Chess` dan replay mainline untuk validasi — `buildFenForTree` tidak perlu replay; cukup `createChess(parent.fen)` + `move(san)`.
 - Assert FEN di test: **jangan hard-code full FEN** (halfmove clock beta.8 = `0`), dan expand rank sebelum cek index file.
 - Kalau menambah field/interface baru di `types/chess.ts`, cek `messages.ts` (response types) dan popup nanti (Phase 11).
+- Kirim data ke popup **hanya** via `getSerializableState()` — field `domElement` (HTMLElement) membuat chrome messaging gagal clone.
 
 ---
 
-## Acceptance Criteria (relevan Phase 7)
+## Acceptance Criteria (relevan Phase 10)
 
-- ✅ #12 Generate FEN per node
-- ✅ Node gagal parse → tidak crash, di-skip, logged
-- ✅ Tidak ada duplikat node (Phase 6)
-- ✅ `npm run typecheck && npm test` hijau semua (33 tests)
+- ✅ #13 Handles SPA navigation (Phase 9)
+- ✅ 7 message types ter-handle dengan benar
+- ✅ Response tanpa `domElement` (serializable)
+- ✅ `npm run typecheck && npm test` hijau semua (42 tests)
 
 ---
 
 ## Git
 
 - Repo: `C:\Users\malino\Desktop\chiss` (git repo)
-- Commits terakhir: `Phase 8: moveTracker...`, `Phase 6-7: move tree...`, `Phase 2-5...`, `Phase 1...` (Phase 9 belum di-commit)
+- Commits terakhir: `Phase 8: moveTracker...`, `Phase 6-7: move tree...`, `Phase 2-5...`, `Phase 1...` (Phase 9-10 belum di-commit)
 - **Jangan commit/push kecuali user minta eksplisit.**
 
 ---
 
-## Next setelah Phase 9 (sudah selesai)
+## Next setelah Phase 10 (sudah selesai)
 
-- **Phase 10 (NEXT):** message handlers — `chrome.runtime.onMessage` di `index.ts` untuk `GET_GAME_STATE`, `GET_MOVE_TREE`, `GET_MAINLINE`, `GET_VARIATIONS`, `GET_CURRENT_POSITION`, `GET_CURRENT_NODE`, `REFRESH` (types sudah ada di `messages.ts`, `MOVE_TREE_UPDATED` sudah di-export dari `moveTracker.ts`).
-- Lalu Phase 11 (popup UI), 12 (`window.__CHESS_TRACKER__`), 13 (test parser sisa).
+- **Phase 11 (NEXT):** Popup UI React — `App.tsx` + `src/popup/components/`: `StatusHeader`, `MainlineView`, `VariationView`, `PositionView` (FEN + copy), `MoveTreeView`, `ActionButtons` (Refresh/Copy Moves/Copy FEN/Copy JSON). Komunikasi via `chrome.tabs.sendMessage` ke content script (handler sudah siap di Phase 10); popup perlu query tab aktif `*://*.chess.com/*`.
+- Lalu Phase 12 (`window.__CHESS_TRACKER__`), 13 (test parser sisa).

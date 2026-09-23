@@ -1,4 +1,4 @@
-import type { GameState, MoveNode, MoveTree } from "../types/chess";
+import type { GameState, MoveNode, MoveTree, ParsedMove, Variation } from "../types/chess";
 import { log } from "../shared/logger";
 import { debounce, normalizeState } from "../shared/utils";
 import { buildFenForTree } from "../chess/positionBuilder";
@@ -16,6 +16,7 @@ const MOVE_LIST_HINTS =
 export interface TrackerState {
   gameState: GameState;
   moveTree: MoveTree;
+  variations: Variation[];
   updatedAt: number;
 }
 
@@ -23,6 +24,7 @@ function emptyState(): TrackerState {
   return {
     gameState: { detected: false, pageType: "unknown", gameFinished: false },
     moveTree: { root: null, nodes: {}, mainLine: [] },
+    variations: [],
     updatedAt: 0,
   };
 }
@@ -37,19 +39,43 @@ function stripDom(node: MoveNode): MoveNode {
   return copy;
 }
 
-function serializeState(s: TrackerState): string {
+function stripParsedMoveDom(move: ParsedMove): ParsedMove {
+  const copy: ParsedMove = { ...move };
+  delete copy.domElement;
+  return copy;
+}
+
+function stripVariationDom(variation: Variation): Variation {
+  return { ...variation, moves: variation.moves.map(stripParsedMoveDom) };
+}
+
+function stripTreeDom(tree: MoveTree): MoveTree {
   const nodes: Record<string, MoveNode> = {};
-  for (const [id, node] of Object.entries(s.moveTree.nodes)) {
+  for (const [id, node] of Object.entries(tree.nodes)) {
     nodes[id] = stripDom(node);
   }
+  return {
+    ...tree,
+    root: tree.root ? stripDom(tree.root) : null,
+    nodes,
+  };
+}
+
+function serializeState(s: TrackerState): string {
   return normalizeState({
     gameState: s.gameState,
-    moveTree: {
-      ...s.moveTree,
-      root: s.moveTree.root ? stripDom(s.moveTree.root) : null,
-      nodes,
-    },
+    variations: s.variations.map(stripVariationDom),
+    moveTree: stripTreeDom(s.moveTree),
   });
+}
+
+export function getSerializableState(): TrackerState {
+  return {
+    gameState: state.gameState,
+    moveTree: stripTreeDom(state.moveTree),
+    variations: state.variations.map(stripVariationDom),
+    updatedAt: state.updatedAt,
+  };
 }
 
 function emit(s: TrackerState): void {
@@ -87,6 +113,7 @@ export function refresh(): boolean {
     const next: TrackerState = {
       gameState,
       moveTree,
+      variations,
       updatedAt: Date.now(),
     };
     const serialized = serializeState(next);

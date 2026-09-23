@@ -45,3 +45,7 @@ export interface CurrentPositionResponse {
 export interface CurrentNodeResponse {
   node?: MoveNode;
 }
+
+export interface RefreshResponse {
+  refreshed: boolean;
+}
