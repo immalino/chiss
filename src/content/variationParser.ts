@@ -228,6 +228,79 @@ function groupKeyOf(el: HTMLElement): string {
   return `container:${cls}`;
 }
 
+function detectFirstPlyColor(el: HTMLElement): "white" | "black" | null {
+  if (el.classList.contains("black-move")) return "black";
+  if (el.classList.contains("white-move")) return "white";
+  const ply = el.getAttribute("data-ply");
+  if (ply !== null) {
+    const n = parseInt(ply, 10);
+    if (!Number.isNaN(n)) return n % 2 === 0 ? "white" : "black";
+  }
+  return null;
+}
+
+function playQuiet(chess: Chess, san: string): boolean {
+  try {
+    chess.move(san);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function isLegalQuiet(chess: Chess, san: string): boolean {
+  try {
+    const copy = new Chess(chess.fen());
+    copy.move(san);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function replayMainlinePrefix(
+  plies: HTMLElement[],
+  count: number,
+): Chess | null {
+  if (count < 0 || count > plies.length) return null;
+  const chess = new Chess();
+  for (let i = 0; i < count; i++) {
+    const san = extractSanFromElement(plies[i]);
+    if (!san || !playQuiet(chess, san)) return null;
+  }
+  return chess;
+}
+
+function resolveReplay(
+  mainlinePlies: HTMLElement[],
+  firstPly: HTMLElement,
+  firstSan: string,
+  parentIdx: number,
+): { chess: Chess; count: number } | null {
+  const color0 = detectFirstPlyColor(firstPly);
+  const n0 = resolveMoveNumber(firstPly, 0);
+  const fromBlack = Math.max(2 * n0 - 1, 0);
+  const fromWhite = Math.max(2 * (n0 - 1), 0);
+
+  const candidates = new Set<number>();
+  if (parentIdx >= 0) candidates.add(parentIdx + 1);
+  if (color0 === "black") candidates.add(fromBlack);
+  else if (color0 === "white") candidates.add(fromWhite);
+  else {
+    candidates.add(fromBlack);
+    candidates.add(fromWhite);
+  }
+  for (let k = 0; k <= mainlinePlies.length; k++) candidates.add(k);
+
+  for (const k of candidates) {
+    const probe = replayMainlinePrefix(mainlinePlies, k);
+    if (probe && isLegalQuiet(probe, firstSan)) {
+      return { chess: probe, count: k };
+    }
+  }
+  return null;
+}
+
 export function parseVariationsFromDOM(
   root: ParentNode = document,
 ): Variation[] {
@@ -276,27 +349,42 @@ export function parseVariationsFromDOM(
     const variations: Variation[] = [];
 
     groups.forEach((group, groupIndex) => {
-      const chess = new Chess();
       const parentRef = findParentReference(group[0], mainlinePlies);
+      const parentIdx =
+        parentRef !== undefined
+          ? mainlinePlies.findIndex(
+              (p) => getDataNodeValue(p) === parentRef,
+            )
+          : -1;
       const source = sourceFor(group[0]);
       const depth = getVariationDepth(group[0], container);
       const moves: ParsedMove[] = [];
       let lastColor: ParsedMove["color"] | null = null;
 
-      // Replay mainline up to branch point for legal validation
-      if (parentRef !== undefined) {
-        const parentIdx = mainlinePlies.findIndex(
-          (p) => getDataNodeValue(p) === parentRef,
-        );
-        if (parentIdx >= 0) {
-          for (let i = 0; i <= parentIdx; i++) {
-            const san = extractSanFromElement(mainlinePlies[i]);
-            if (san) tryMove(chess, san, i, mainlinePlies[i]);
-          }
-          lastColor = mainlinePlies[parentIdx].classList.contains("black-move")
-            ? "black"
-            : "white";
+      // Resolve replay length so the first variation move is legal.
+      // parentRef alone fails when data-node is missing → replay stays at
+      // the starting position → black's first move is dropped as "illegal".
+      const firstSan = extractSanFromElement(group[0]);
+      let chess = new Chess();
+      let replayCount = 0;
+
+      const resolved = firstSan
+        ? resolveReplay(mainlinePlies, group[0], firstSan, parentIdx)
+        : null;
+
+      if (resolved) {
+        chess = resolved.chess;
+        replayCount = resolved.count;
+      } else if (parentIdx >= 0) {
+        for (let i = 0; i <= parentIdx; i++) {
+          const san = extractSanFromElement(mainlinePlies[i]);
+          if (san) tryMove(chess, san, i, mainlinePlies[i]);
         }
+        replayCount = parentIdx + 1;
+      }
+
+      if (replayCount > 0) {
+        lastColor = chess.turn() === "w" ? "black" : "white";
       }
 
       group.forEach((ply, i) => {

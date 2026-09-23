@@ -1,6 +1,6 @@
 # Handover — Chiss (Chess.com DOM Move Tree Tracker)
 
-> Session baru: lanjutkan **Phase 11 — Popup UI**.
+> Session baru: lanjutkan **Phase 12 — Debug Commands**.
 > Baca `implementation-plan.md` untuk konteks full 13 phase.
 
 ---
@@ -19,11 +19,21 @@
 | 8 — MutationObserver & State | ✅ | `src/content/moveTracker.ts` + observer pindah dari `index.ts` |
 | 9 — SPA Navigation | ✅ | `startSpaNavigation/stopSpaNavigation` di `moveTracker.ts`, dipanggil di `index.ts` |
 | 10 — Chrome Message API | ✅ | `src/content/messageHandler.ts` + `tests/messageHandler.test.ts` (9 test pass) |
-| 11 — Popup UI | 📋 NEXT | `App.tsx` placeholder |
-| 12 — Debug Commands | ⬜ | — |
+| 11 — Popup UI | ✅ | `src/popup/App.tsx` + `main.tsx` + `components/*` (6 komponen) |
+| 12 — Debug Commands | 📋 NEXT | — |
 | 13 — Testing | partial | `moveTree` + `positionBuilder` + `messageHandler`; parser tests menyusul |
 
 **Verify setelah tiap phase:** `npx tsc --noEmit` dan `npx vitest run`.
+
+---
+
+## Phase 11 — Selesai
+
+**Done:** Popup UI React full. Entry: `src/popup/index.html` → `main.tsx` → `App.tsx` (+ `index.css` tailwind). `App.tsx` fetch 4 message paralel (`GET_GAME_STATE`, `GET_MOVE_TREE`, `GET_VARIATIONS`, `GET_CURRENT_POSITION`) via `sendToActiveTab()` (`messaging.ts` — `chrome.tabs.query` active tab + `chrome.tabs.sendMessage`), state loading/error/silent-refresh. Komponen di `src/popup/components/`: `StatusHeader` (koneksi/game/move count), `MainlineView` (pair putih-hitam, highlight current), `VariationView` (indent per depth, current move via path-to-current sans match), `PositionView` (FEN + copy), `MoveTreeView` (baris pasangan `N. putih hitam`; **putih-variasi → split baris**: `N. white ...` → var putih → deferred `N. ... black` (SELALU tampil, Q&A user) → var hitam; hitam-variasi-saja → pasangan lengkap + var di bawah; variasi inline indent 40+(depth-1)*14, flex-wrap; orphans → setelah baris terakhir), `ActionButtons` (Refresh/Copy Moves/**Copy Variation** (branch→current: walk-up node `!isMainLine`, disabled saat current di mainline)/Copy FEN/Copy JSON, feedback "Copied!"). Helpers: `helpers.ts` (`copyText` clipboard, `formatMoves` → "1. e4 e5 2. Nf3 ...").
+
+**Gotcha:** `chrome.tabs.query({active, currentWindow})` + `sendMessage` TANPA permission `tabs` — tidak dapat `tab.url`, jangan filter URL di popup; cukup try sendMessage, gagal = "open a Chess.com tab". Highlight current di `VariationView` pakai path-to-current (walk `parentId` → SAN[]) dicocokkan sebagai suffix dari prefix variation — jangan `endsWith` node id (bisa salah highlight). Semua response sudah bebas `domElement` dari Phase 10.
+
+**Verify:** `npm run typecheck` ✅, `npm test` ✅ (42 tests), `npm run build` ✅ (popup 154 kB + css 9.5 kB ter-compile).
 
 ---
 
@@ -84,8 +94,14 @@ src/
 │   ├── mainlineParser.ts   # parseMainLineFromDOM(): ParsedMove[]
 │   └── variationParser.ts  # parseVariationsFromDOM(): Variation[]
 ├── popup/
-│   ├── index.html          # loads ./App.tsx
-│   └── App.tsx             # placeholder <h1>Chiss</h1>
+│   ├── index.html          # loads ./main.tsx
+│   ├── main.tsx            # ✅ Phase 11: ReactDOM mount + import index.css
+│   ├── index.css           # ✅ Phase 11: tailwind directives + popup body
+│   ├── App.tsx             # ✅ Phase 11: state + fetch 4 message + render sections
+│   ├── messaging.ts        # ✅ Phase 11: sendToActiveTab (chrome.tabs)
+│   ├── helpers.ts          # ✅ Phase 11: copyText, formatMoves
+│   └── components/         # ✅ Phase 11: StatusHeader, MainlineView, VariationView,
+│                           #    PositionView, MoveTreeView, ActionButtons
 └── manifest.ts             # MV3, content_script chess.com, popup
 ```
 
@@ -156,29 +172,31 @@ Load unpacked extension dari `dist/` setelah `npm run build` (atau via CRXJS dev
 - `tryMove()` di `moveParser.ts` sudah wrap try/catch + `MoveParseError` log — **reuse, jangan duplikasi**.
 - Variation parser (`variationParser.ts`) men-clone `Chess` dan replay mainline untuk validasi — `buildFenForTree` tidak perlu replay; cukup `createChess(parent.fen)` + `move(san)`.
 - Assert FEN di test: **jangan hard-code full FEN** (halfmove clock beta.8 = `0`), dan expand rank sebelum cek index file.
-- Kalau menambah field/interface baru di `types/chess.ts`, cek `messages.ts` (response types) dan popup nanti (Phase 11).
+- Kalau menambah field/interface baru di `types/chess.ts`, cek `messages.ts` (response types) dan popup (`App.tsx` fetch shape).
 - Kirim data ke popup **hanya** via `getSerializableState()` — field `domElement` (HTMLElement) membuat chrome messaging gagal clone.
+- **variationParser replay (bug fix Phase 11+):** kalau `parentRef` tidak ketemu di mainline, replay lama tetap di posisi awal → langkah pertama variasi HITAM dianggap ilegal (giliran putih) dan DIBUANG diam-diam (test asli: `1... c6` hilang). Fix: `resolveReplay()` — cari panjang prefix mainline (kandidat: parentIdx+1 → formula moveNumber `2n-1`/`2(n-1)` → scan 0..len) yang membuat langkah pertama LEGAL via `isLegalQuiet`; fallback ke replay parentRef lama. `lastColor` dihitung dari `chess.turn()`, bukan classList.
 
 ---
 
-## Acceptance Criteria (relevan Phase 10)
+## Acceptance Criteria (relevan Phase 11)
 
 - ✅ #13 Handles SPA navigation (Phase 9)
 - ✅ 7 message types ter-handle dengan benar
 - ✅ Response tanpa `domElement` (serializable)
 - ✅ `npm run typecheck && npm test` hijau semua (42 tests)
+- ✅ #1-#12 popup menampilkan detect/mainline/variations/tree/FEN (Phase 11)
 
 ---
 
 ## Git
 
 - Repo: `C:\Users\malino\Desktop\chiss` (git repo)
-- Commits terakhir: `Phase 8: moveTracker...`, `Phase 6-7: move tree...`, `Phase 2-5...`, `Phase 1...` (Phase 9-10 belum di-commit)
+- Commits terakhir: `Phase 8: moveTracker...`, `Phase 6-7: move tree...`, `Phase 2-5...`, `Phase 1...` (Phase 9-11 belum di-commit)
 - **Jangan commit/push kecuali user minta eksplisit.**
 
 ---
 
-## Next setelah Phase 10 (sudah selesai)
+## Next setelah Phase 11 (sudah selesai)
 
-- **Phase 11 (NEXT):** Popup UI React — `App.tsx` + `src/popup/components/`: `StatusHeader`, `MainlineView`, `VariationView`, `PositionView` (FEN + copy), `MoveTreeView`, `ActionButtons` (Refresh/Copy Moves/Copy FEN/Copy JSON). Komunikasi via `chrome.tabs.sendMessage` ke content script (handler sudah siap di Phase 10); popup perlu query tab aktif `*://*.chess.com/*`.
-- Lalu Phase 12 (`window.__CHESS_TRACKER__`), 13 (test parser sisa).
+- **Phase 12 (NEXT):** Debug Commands — expose `window.__CHESS_TRACKER__ = { getState, getMoveTree, getMainline, getVariations, getCurrentNode, inspectDOM, refresh }` di `src/content/index.ts`. Note: `window` di isolated world ≠ page window; hanya untuk DevTools (content script context / console).
+- Lalu Phase 13 (test parser sisa: `mainlineParser`, `variationParser`, state diff, SPA reset).

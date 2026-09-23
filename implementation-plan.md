@@ -319,8 +319,10 @@ REFRESH → triggers full re-parse
 
 ---
 
-### Phase 11 — Popup UI
+### Phase 11 — Popup UI ✅
 **Goal:** React popup showing game state, move list, variations.
+
+**Status:** Done — `src/popup/` (`App.tsx`, `main.tsx`, `index.css`, `messaging.ts`, `helpers.ts`, `components/`: StatusHeader, MainlineView, VariationView, PositionView, MoveTreeView, ActionButtons). Fetch 4 messages paralel via `chrome.tabs.sendMessage`, clipboard copy, refresh.
 
 **Components:**
 - `StatusHeader` — connection status, game detected, move count
@@ -328,7 +330,7 @@ REFRESH → triggers full re-parse
 - `VariationView` — current variation display
 - `PositionView` — FEN display with copy button
 - `MoveTreeView` — indented tree visualization
-- `ActionButtons` — Refresh, Copy Moves, Copy FEN, Copy JSON
+- `ActionButtons` — Refresh, Copy Moves, Copy Variation (active variation branch→current), Copy FEN, Copy JSON
 
 **Create:**
 - `src/popup/App.tsx`
